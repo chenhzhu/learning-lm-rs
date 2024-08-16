@@ -3,7 +3,7 @@ use std::vec;
 
 use crate::config::LlamaConfigJson;
 use crate::kvcache::KVCache;
-use crate::operators as OP;
+use crate::operators::{self as OP, matmul_transb, rms_norm, silu, matadd, matmul};
 use crate::params::LLamaParams;
 use crate::tensor::Tensor;
 use safetensors::SafeTensors;
@@ -167,7 +167,23 @@ fn mlp(
     rms_w: &Tensor<f32>,
     eps: f32,
 ) {
-    todo!("Implement mlp");
+    // 计算过程如下:
+    // hidden = rms_norm(residual)
+    // gate = hidden @ gate_weight.T
+    // up = hidden @ up_weight.T
+    // hidden = gate * sigmoid(gate) * up ## silu
+    // hidden = hidden @ down_weight.T
+    // residual = hidden + residual
+
+
+    OP::rms_norm(hidden_states, &residual, rms_w, eps);
+    OP::matmul_transb(gate, 0.0, hidden_states, w_gate, 1.0);
+    OP::matmul_transb(up, 0.0, hidden_states, w_up, 1.0);
+    OP::silu(up, &gate);
+    OP::matmul_transb(hidden_states, 0.0, up, w_down, 1.0);
+    *residual = OP::matadd(residual, &hidden_states);
+
+    // todo!("Implement mlp");
 }
 
 #[test]
@@ -237,3 +253,28 @@ pub fn test_load_safetensors() {
     assert!(float_eq(&model.params.wo[0].data()[100], &0.01965332, 1e-6));
 
 }
+
+
+
+
+// #[test]
+// pub fn test_check_safetensor() {
+//     use safetensors::SafeTensors;
+//     use std::fs::File;
+//     use std::io::BufReader;
+//     use std::path::PathBuf;
+//     // 打开 SafeTensors 文件
+//     let project_dir = env!("CARGO_MANIFEST_DIR");
+//     let model_dir = PathBuf::from(project_dir).join("models").join("story");
+
+//     let config = File::open(model_dir.join("config.json")).unwrap();
+//     let config: LlamaConfigJson = serde_json::from_reader(config).unwrap();
+//     let model_file = std::fs::read(model_dir.join("model.safetensors")).unwrap();
+//     let safetensors = SafeTensors::deserialize(&model_file).unwrap();
+
+//     // 获取并打印所有的 tensor 名称
+//     for name in safetensors.names() {
+//         println!("Tensor name: {}", name);
+//     }
+
+// }

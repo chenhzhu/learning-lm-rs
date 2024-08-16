@@ -71,25 +71,88 @@ pub fn masked_softmax(y: &mut Tensor<f32>) {
 }
 
 pub fn rms_norm(y: &mut Tensor<f32>, x: &Tensor<f32>, w: &Tensor<f32>, epsilon: f32) {
-    todo!("实现 rms_norm，计算前做一些必要的检查会帮助你后续调试")
+    // x最后一维度需要与w维度一样
+    // x与y需要一样的维度
+    assert_eq!(*x.shape().last().unwrap(), w.shape()[0]);
+    assert_eq!(y.shape(), x.shape());
+
+    let n = *x.shape().last().unwrap(); // 获取最后一维的大小
+    let batch = x.size() / n; // 批次数量
+
+    let _x = x.data();
+    let _w = w.data();
+    let _y = unsafe { y.data_mut() };
+
+    // 对每个长度为 n 的向量执行归一化
+    for i in 0..batch {
+        let start_j = i * n;
+        let end_j = start_j + n;
+
+        // 计算平方和
+        // let mut square_sum = 0.0;
+        // for j in start..end {
+        //     square_sum += _x[j] * _x[j];
+        // }
+        let square_sum: f32 = _x[start_j..end_j].iter().map(|v| v * v).sum();
+
+        // 计算 RMS
+        let rms = (square_sum / n as f32  + epsilon).sqrt();
+
+        // 归一化并进行 element-wise 乘法
+        for j in start_j..end_j {
+            _y[j] = _x[j] / rms * _w[j - start_j];
+        }
+    }
+    // DONE ("实现 rms_norm，计算前做一些必要的检查会帮助你后续调试")
+}
+
+pub fn sigmoid(v: &f32) -> f32 {
+    1.0 / (1.0 + (-v).exp())
 }
 
 // y = sigmoid(x) * x * y
 // hint: this is an element-wise operation
 pub fn silu(y: &mut Tensor<f32>, x: &Tensor<f32>) {
-    // let len = y.size();
-    // assert!(len == x.size());
+    let length = y.size();
+    assert!(length == x.size());
 
-    // let _y = unsafe { y.data_mut() };
-    // let _x = x.data();
+    let _y = unsafe { y.data_mut() };
+    let _x = x.data();
 
-    todo!("实现 silu，这里给了一些前期准备工作的提示，你可以参考")
+    
+    for i in 0..length {
+        let sigmoid_x = sigmoid(&_x[i]);
+        _y[i] = sigmoid_x * _x[i] * _y[i];
+    }
+
+    // DONE ("实现 silu,这里给了一些前期准备工作的提示,你可以参考")
 }
 
 // C = beta * C + alpha * A @ B^T
 // hint: You don't need to do an explicit transpose of B
 pub fn matmul_transb(c: &mut Tensor<f32>, beta: f32, a: &Tensor<f32>, b: &Tensor<f32>, alpha: f32) {
-    todo!("实现 matmul_transb，计算前做一些必要的检查会帮助你后续调试");
+    let (m, k1) = (a.shape()[0], a.shape()[1]);
+    let (n, k2) = (b.shape()[0], b.shape()[1]);
+    assert_eq!(k1, k2);
+    assert_eq!(c.shape(), &vec![m, n]);
+
+    let _a = a.data();
+    let _b = b.data();
+    let _c = unsafe { c.data_mut() };
+
+    for i in 0..m {
+        for j in 0..n {
+            let mut sum = 0.0;
+            for k in 0..k1 {
+                // 计算 A @ B^T
+                sum += _a[i * k1 + k] * _b[j * k2 + k]; // 使用 B 的转置
+            }
+            // 计算 beta * C + (A @ B^T)
+            _c[i * n + j] = beta * _c[i * n + j] + alpha * sum;
+        }
+    }
+    
+    // DONE ("实现 matmul_transb，计算前做一些必要的检查会帮助你后续调试");
 }
 
 // Dot product of two tensors (treated as vectors)
@@ -170,6 +233,52 @@ pub fn random_sample(x: &Tensor<f32>, top_p: f32, top_k: u32, temperature: f32) 
     // sample
     logits.iter().find(|p| p.val >= plimit).unwrap().tok
 }
+
+// 添加需要的自创运算函数
+// Matrix addition operation
+pub fn matadd<T>(a: &Tensor<T>, b: &Tensor<T>) -> Tensor<T>
+where
+    T: Copy + Clone + Default + std::ops::Add<Output = T>,
+{
+    assert_eq!(a.shape(), b.shape(), "Shapes of the tensors must match for addition");
+
+    let data: Vec<T> = a.data()
+        .iter()
+        .zip(b.data().iter())
+        .map(|(&x, &y)| x + y)
+        .collect();
+
+    Tensor::new(data, a.shape())
+}
+
+pub fn matmul(a: &Tensor<f32>, b: &Tensor<f32>) -> Tensor<f32>
+where
+    f32: Copy + Clone + Default + std::ops::Mul<Output = f32> + std::ops::Add<Output = f32>,
+{
+    let (m, k1) = (a.shape()[0], a.shape()[1]);
+    let (k2, n) = (b.shape()[0], b.shape()[1]);
+
+    assert_eq!(k1, k2, "Inner dimensions must match for matrix multiplication");
+
+    let mut data = vec![0.0; m * n];
+    let _a = a.data();
+    let _b = b.data();
+    
+    for i in 0..m {
+        for j in 0..n {
+            let mut sum = 0.0;
+            for k in 0..k1 {
+                sum += _a[i * k1 + k] * _b[k * n + j];
+            }
+            data[i * n + j] = sum;
+        }
+    }
+
+    Tensor::new(data, &vec![m, n])
+}
+
+
+
 
 // Your implementation should at least pass the following tests:
 #[test]
