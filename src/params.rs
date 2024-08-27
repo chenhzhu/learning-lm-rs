@@ -23,7 +23,7 @@ pub struct LLamaParams<T> {
 
 impl LLamaParams<f32> {
     pub(crate) fn from_safetensors(safetensor: &SafeTensors, config: &LlamaConfigJson) -> Self {
-        // todo!("实现从safetensors文件的模型参数加载");
+        // DONE ("实现从safetensors文件的模型参数加载");
         let get_tensor = |name: &str| {
             let tensor_data = safetensor.tensor(name).expect(&format!("Tensor {} not found", name));
             let shape: Vec<usize> = tensor_data.shape().into_iter().map(|s| *s as usize).collect();

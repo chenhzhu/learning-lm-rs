@@ -183,7 +183,7 @@ fn mlp(
     OP::matmul_transb(hidden_states, 0.0, up, w_down, 1.0);
     *residual = OP::matadd(residual, &hidden_states);
 
-    // todo!("Implement mlp");
+    // DONE ("Implement mlp");
 }
 
 #[test]
